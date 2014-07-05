@@ -1,0 +1,9 @@
+game:
+  DeathMatch:
+    enabled: true
+  TeamDeathMatch:
+    enabled: true
+  Tag:
+    enabled: true
+  Grab:
+    enabled: true

@@ -1,0 +1,23 @@
+name: MyGames
+version: 0.0
+main: xenar47.bukkit.mygames.MyGames
+
+commands:
+  join:
+    default: true
+  start:
+    default: true
+  setup:
+    default: op
+  play:
+    default: op
+  setworld:
+    default: op
+  prepworld:
+    default: op
+  addworld:
+    default: op
+  saveworld:
+    default: op
+  list:
+    default: true
