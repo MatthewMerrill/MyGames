@@ -1,4 +1,4 @@
-XGames
+MyGames
 ======
 
-Bukkit Plugin/Library to assist Minigame Creation
+Bukkit Plugin/Library to assist minigame Creation
