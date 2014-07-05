@@ -1,1 +1,8 @@
 *.class
+.classpath
+
+.project
+
+*.prefs
+
+EXPORT_JAR.jardesc
