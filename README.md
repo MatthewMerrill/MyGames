@@ -3,6 +3,8 @@ MyGames
 
 Bukkit Plugin/Library to assist minigame Creation
 
+See the Bukkit Page 
+
 
 Terms of Use / Legal
 ======
@@ -26,3 +28,5 @@ Download
 ======
 
 Do not download unless you agree to the terms above.
+
+Download available at: https://sourceforge.net/projects/mattmerr47-mygames/
