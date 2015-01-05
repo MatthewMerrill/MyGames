@@ -3,21 +3,49 @@ version: 0.0
 main: xenar47.bukkit.mygames.MyGames
 
 commands:
-  join:
+  mygames:
     default: true
-  start:
+
+permissions:
+  mygames.command.play:
+    description: Lets you change your mode to play
+    default: op
+  mygames.command.setup:
+    description: Lets you change your mode to setup
+    default: op
+  mygames.command.start:
+    description: Lets you force start a game
+    default: op
+  mygames.command.stop:
+    description: Lets you force stop a game
+    default: op
+  mygames.command.join:
+    description: Lets you join a game using the command
     default: true
-  setup:
+  mygames.command.leave:
+    description: Lets you leave a game using the command
+    default: true
+  mygames.command.list:
+    description: Lets you list the games that are running
+    default: true
+  mygames.command.setspawn:
+    description: Lets you set the spawn for returning from a game
+    default: true
+  mygames.command.world.*:
+    description: Lets you use all the world commands
     default: op
-  play:
+    children:
+      mygames.command.world.add: true
+      mygames.command.world.join: true
+  mygames.command.world.add:
+    description: Lets you add a game to the playable map list
     default: op
-  setworld:
+  mygames.command.world.join:
+    description: Lets you join another world using the command
     default: op
-  prepworld:
+  mygames.sign.edit:
+    description: Lets you create or destroy a game sign
     default: op
-  addworld:
-    default: op
-  saveworld:
-    default: op
-  list:
+  mygames.sign.use:
+    description: Lets you use a game sign
     default: true

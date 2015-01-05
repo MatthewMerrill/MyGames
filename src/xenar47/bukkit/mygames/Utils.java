@@ -1,7 +1,9 @@
 package xenar47.bukkit.mygames;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Random;
 
 import org.bukkit.ChatColor;
 import org.bukkit.EntityEffect;
@@ -20,7 +22,7 @@ public class Utils {
 					+ itemColor + items.get(1);
 		} else if (items.size() >= 1) {
 			for (int i = 0; i < items.size(); i++) {
-				list +=  baseColor + ((i==0)?"":", ")
+				list +=baseColor + ((i==0)?"":", ")
 						+ (((i==items.size()-1) && (i != 0))?"and ":"") 
 						+ itemColor + items.get(i);
 			}
@@ -56,6 +58,12 @@ public class Utils {
 		villager.playEffect(EntityEffect.HURT);
 		villager.playEffect(EntityEffect.DEATH);
 		villager.setHealth(0);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public static <T> T getRandomItem(Collection<T> items) {
+		Random r = new Random();
+		return (T) items.toArray()[r.nextInt(items.size())];
 	}
 
 }

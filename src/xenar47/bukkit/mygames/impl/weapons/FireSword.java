@@ -1,4 +1,4 @@
-package xenar47.bukkit.mygames.weapons;
+package xenar47.bukkit.mygames.impl.weapons;
 
 import xenar47.bukkit.mygames.api.Game;
 import xenar47.bukkit.mygames.api.Weapon;
@@ -17,15 +17,15 @@ public class FireSword extends Weapon {
 	}
 
 	@Override
-	public void primary(Game game, Player player) {
+	public boolean primary(Game game, Player player) {
 		// TODO Auto-generated method stub
-		
+		return false;
 	}
 
 	@Override
-	public void secondary(Game game, Player player) {
+	public boolean secondary(Game game, Player player) {
 		// TODO Auto-generated method stub
-		
+		return false;
 	}
 
 	@Override

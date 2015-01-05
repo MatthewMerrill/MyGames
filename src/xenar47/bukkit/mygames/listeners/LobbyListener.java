@@ -1,7 +1,6 @@
-package xenar47.bukkit.mygames;
+package xenar47.bukkit.mygames.listeners;
 
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -11,13 +10,17 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 
-public class BasePlayerListener implements Listener {
+import xenar47.bukkit.mygames.MetadataManager;
+import xenar47.bukkit.mygames.MyGames;
+
+public class LobbyListener implements Listener {
 
 	MyGames plugin;
 	MetadataManager mm;
 
-	public BasePlayerListener(MyGames plugin) {
+	public LobbyListener(MyGames plugin) {
 		this.plugin = plugin;
 		mm = plugin.getMetaMgr();
 	}
@@ -25,14 +28,12 @@ public class BasePlayerListener implements Listener {
 	@EventHandler
 	public void onJoin(PlayerJoinEvent event) {
 		plugin.toLobby(event.getPlayer());
-		event.setJoinMessage(ChatColor.YELLOW
-				+ ChatColor.stripColor(event.getPlayer().getDisplayName())
-				+ ChatColor.YELLOW + " has entered the arena!");
+		event.setJoinMessage(plugin.getChatManager().joinServer(event.getPlayer()));
 	}
 
 	@EventHandler
 	public void onDrop(PlayerDropItemEvent event) {
-		if (mm.getMode(event.getPlayer()) == mm.LOBBY) {
+		if (mm.getMode(event.getPlayer()) == MetadataManager.LOBBY) {
 
 			event.setCancelled(true);
 			sendErrorMessage(event.getPlayer());
@@ -42,9 +43,9 @@ public class BasePlayerListener implements Listener {
 	@EventHandler
 	public void onInvOpen(InventoryOpenEvent event) {
 		Player player = Bukkit.getPlayer(event.getPlayer().getUniqueId());
-		if (mm.getMode(player) != mm.SETUP) {
+		if (mm.getMode(player) == MetadataManager.LOBBY) {
 
-			event.getPlayer().closeInventory();
+		event.getPlayer().closeInventory();
 			event.setCancelled(true);
 			if (player != null)
 				sendErrorMessage(player);
@@ -54,7 +55,7 @@ public class BasePlayerListener implements Listener {
 	@EventHandler
 	public void onInvClick(InventoryClickEvent event) {
 		Player player = Bukkit.getPlayer(event.getWhoClicked().getUniqueId());
-		if (mm.getMode(player) != mm.SETUP) {
+		if (mm.getMode(player) == MetadataManager.LOBBY) {
 
 			event.getWhoClicked().closeInventory();
 			event.setCancelled(true);
@@ -65,7 +66,7 @@ public class BasePlayerListener implements Listener {
 
 	@EventHandler
 	public void onBlockPlaceEvent(BlockPlaceEvent event) {
-		if (mm.getMode(event.getPlayer()) != mm.SETUP) {
+		if (mm.getMode(event.getPlayer()) == MetadataManager.LOBBY) {
 
 			event.setCancelled(true);
 			sendErrorMessage(event.getPlayer());
@@ -81,17 +82,21 @@ public class BasePlayerListener implements Listener {
 
 	@EventHandler
 	public void onBlockBreakEvent(BlockBreakEvent event) {
-		if (mm.getMode(event.getPlayer()) != mm.SETUP) {
+		if (mm.getMode(event.getPlayer()) == MetadataManager.LOBBY) {
 
 			event.setCancelled(true);
 			sendErrorMessage(event.getPlayer());
 		}
 	}
+	
+	@EventHandler
+	public void onRespawnEvent(PlayerRespawnEvent event) {
+		if (mm.getMode(event.getPlayer()) == MetadataManager.LOBBY) {
+			event.setRespawnLocation(plugin.lobbyLocation());
+		}
+	}
 
 	public void sendErrorMessage(Player player) {
-		player.sendMessage(ChatColor.GRAY.toString()
-				+ ChatColor.ITALIC.toString() + " I'm sorry "
-				+ ChatColor.stripColor(player.getDisplayName())
-				+ ", but I'm afraid I can't let you do that.");
+		player.sendMessage(plugin.getChatManager().actionNotAllowed());
 	}
 }

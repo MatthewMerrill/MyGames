@@ -1,29 +1,29 @@
 /**
  * 
  */
-package xenar47.bukkit.mygames.games;
+package xenar47.bukkit.mygames.impl.games;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.UUID;
-
-import xenar47.bukkit.mygames.ScoreboardManager.GameScore;
-import xenar47.bukkit.mygames.api.Game;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.DyeColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 
+import xenar47.bukkit.mygames.api.Game;
+import xenar47.bukkit.mygames.api.GameScore;
+import xenar47.bukkit.mygames.world.location.WorldLocation;
+
 public class DMGame extends Game {
 
-	private HashMap<UUID, Integer> playerKills;
+	//private HashMap<UUID, Integer> playerKills;
 
 	public DMGame() {
-		playerKills = new HashMap<UUID, Integer>();
+		//playerKills = new HashMap<UUID, Integer>();
 	}
 
 	@Override
@@ -33,7 +33,7 @@ public class DMGame extends Game {
 
 	@Override
 	public void preparePlayer(Player player) {
-		playerKills.put(player.getUniqueId(), 0);
+		//playerKills.put(player.getUniqueId(), 0);
 
 		PlayerInventory pi = player.getInventory();
 		pi.clear();
@@ -72,33 +72,38 @@ public class DMGame extends Game {
 		if (!hasPlayer(player))
 			return;
 
-		mygames.toLobby(player);
-		playerKills.remove(player);
-		removePlayer(player);
+		//mygames.toLobby(player);
+		//playerKills.remove(player);
+		//removePlayer(player);
 
 		Player killer = player.getKiller();
 		if (killer != null) {
-			int kills = playerKills.get(killer.getUniqueId());
-			playerKills.put(killer.getUniqueId(), kills+1);
+			if (killer.getUniqueId() == player.getUniqueId()) {
+				this.removePoints(killer.getUniqueId(), 1);
+			} else {
+				this.addPoints(killer.getUniqueId(), 1);
+			}
+			//int kills = playerKills.get(killer.getUniqueId());
+			//playerKills.put(killer.getUniqueId(), kills+1);
 		}
 		
-		Bukkit.broadcastMessage(player.getDisplayName() + " has perished.");
+		//Bukkit.broadcastMessage(player.getDisplayName() + " has perished.");
 
 		return;
 	}
 	
-	@Override
+	/*@Override
 	public boolean shouldEnd(){
 		return getPlayers().size() <= 1;
-	}
+	}*/
 	
 	@Override
-	public ArrayList<Player> getWinners() {
+	public ArrayList<String> getWinners() {
 		if (getPlayers().size() != 1)
 			return null;
 
-		ArrayList<Player> winner = new ArrayList<Player>();
-		winner.add(Bukkit.getPlayer(getPlayers().get(0)));
+		ArrayList<String> winner = new ArrayList<String>();
+		winner.add(Bukkit.getPlayer(getPlayers().get(0)).getName());
 		return winner;
 	}
 
@@ -107,7 +112,7 @@ public class DMGame extends Game {
 		return orderHighest(getPlayerScores());
 	}
 
-	@Override
+	/*@Override
 	public ArrayList<GameScore> getPlayerScores() {
 		ArrayList<GameScore> s = new ArrayList<GameScore>();
 		for (UUID uuid : this.playerKills.keySet()) {
@@ -115,18 +120,60 @@ public class DMGame extends Game {
 					playerKills.get(uuid)));
 		}
 		return s;
-	}
+	}*/
 
 	@Override
 	public void warmupTick() {
-		// TODO Auto-generated method stub
 		
 	}
 
 	@Override
 	public void tick() {
-		// TODO Auto-generated method stub
 		
+	}
+
+	@Override
+	public String[] getAliases() {
+		return new String[]{"DM"};
+	}
+
+	@Override
+	public DyeColor[] getSpawnColors() {
+		return null;
+	}
+
+	@Override
+	public WorldLocation[] getLocationTypes() {
+		return null;
+	}
+
+	@Override
+	public boolean doFallDamage() {
+		return true;
+	}
+
+	@Override
+	public boolean doDrownDamage() {
+		return true;
+	}
+
+	@Override
+	public int getMinPlayers() {
+		return 2;
+	}
+
+	@Override
+	public int getMaxPlayers() {
+		return 8;
+	}
+
+	@Override
+	public boolean allowJoinInProgress() {
+		return false;
+	}
+
+	@Override
+	public void prepareGame() {
 	}
 
 

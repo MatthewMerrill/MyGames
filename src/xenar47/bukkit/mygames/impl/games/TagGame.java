@@ -1,12 +1,9 @@
-package xenar47.bukkit.mygames.games;
+package xenar47.bukkit.mygames.impl.games;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
 import java.util.UUID;
-
-import xenar47.bukkit.mygames.ScoreboardManager.GameScore;
-import xenar47.bukkit.mygames.api.Game;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -15,6 +12,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.material.Wool;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+
+import xenar47.bukkit.mygames.api.Game;
+import xenar47.bukkit.mygames.api.GameScore;
+import xenar47.bukkit.mygames.world.location.WorldLocation;
 
 public class TagGame extends Game {
 
@@ -25,6 +26,11 @@ public class TagGame extends Game {
 	@Override
 	public String getName() {
 		return "Tag";
+	}
+	
+	@Override
+	public double getSecsPerTick() {
+		return 1;
 	}
 
 	/**
@@ -56,8 +62,7 @@ public class TagGame extends Game {
 
 	@Override
 	public void prepareGame() {
-		super.prepareGame();
-
+		
 		Random r = new Random();
 		int index = r.nextInt(getPlayers().size());
 		Player p = Bukkit.getPlayer(getPlayers().get(index));
@@ -80,7 +85,7 @@ public class TagGame extends Game {
 		int score = 0;
 		if (scores.containsKey(it))
 			score = scores.get(it);
-		scores.put(it, score + getSecsPerTick());
+		scores.put(it, (int)(score + getSecsPerTick()));
 	
 		Player p = Bukkit.getPlayer(it);
 		
@@ -127,16 +132,16 @@ public class TagGame extends Game {
 		setIt(player);
 	}
 	
-	@Override
+	/*@Override
 	public boolean shouldEnd() {
 		return false;
-	}
+	}*/
 
 	@Override
-	public ArrayList<Player> getWinners(){
-		return highestScorers(scores);
+	public ArrayList<String> getWinners(){
+		return lowestScorers(scores);
 	}
-	
+/*	
 	@Override
 	public ArrayList<GameScore> getSideScores() {
 		return orderLowest(getPlayerScores());
@@ -149,5 +154,51 @@ public class TagGame extends Game {
 			s.add(new GameScore(Bukkit.getPlayer(uuid).getName(), scores.get(uuid)));
 		}
 		return s;
+	}*/
+
+	@Override
+	public String[] getAliases() {
+		return null;
+	}
+
+	@Override
+	public DyeColor[] getSpawnColors() {
+		return null;
+	}
+
+	@Override
+	public WorldLocation[] getLocationTypes() {
+		return null;
+	}
+
+	@Override
+	public boolean doFallDamage() {
+		return false;
+	}
+
+	@Override
+	public boolean doDrownDamage() {
+		return false;
+	}
+
+	@Override
+	public int getMinPlayers() {
+		return 4;
+	}
+
+	@Override
+	public int getMaxPlayers() {
+		// TODO Auto-generated method stub
+		return 8;
+	}
+
+	@Override
+	public boolean allowJoinInProgress() {
+		return true;
+	}
+
+	@Override
+	public ArrayList<GameScore> getSideScores() {
+		return orderLowest(this.getPlayerScores());
 	}
 }

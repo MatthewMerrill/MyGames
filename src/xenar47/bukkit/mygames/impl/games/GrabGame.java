@@ -1,12 +1,9 @@
-package xenar47.bukkit.mygames.games;
+package xenar47.bukkit.mygames.impl.games;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
 import java.util.UUID;
-
-import xenar47.bukkit.mygames.ScoreboardManager.GameScore;
-import xenar47.bukkit.mygames.api.Game;
 
 import org.bukkit.Bukkit;
 import org.bukkit.DyeColor;
@@ -14,6 +11,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.material.Wool;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+
+import xenar47.bukkit.mygames.api.Game;
+import xenar47.bukkit.mygames.api.GameScore;
+import xenar47.bukkit.mygames.world.location.WorldLocation;
 
 public class GrabGame extends Game {
 
@@ -25,7 +26,12 @@ public class GrabGame extends Game {
 	public String getName() {
 		return "Grab";
 	}
-
+	
+	@Override
+	public double getSecsPerTick() {
+		return 1;
+	}
+	
 	/**
 	 * @param mygames
 	 */
@@ -55,7 +61,7 @@ public class GrabGame extends Game {
 
 	@Override
 	public void prepareGame() {
-		super.prepareGame();
+		//super.prepareGame();
 
 		Random r = new Random();
 		int index = r.nextInt(getPlayers().size());
@@ -87,7 +93,7 @@ public class GrabGame extends Game {
 		int score = 0;
 		if (scores.containsKey(it))
 			score = scores.get(it);
-		scores.put(it, score + getSecsPerTick());
+		scores.put(it, (int)(score + getSecsPerTick()));
 		
 		for (UUID uuid : getPlayers()) {
 			if (uuid == it)
@@ -131,8 +137,8 @@ public class GrabGame extends Game {
 	}
 
 	@Override
-	public ArrayList<Player> getWinners(){
-		return lowestScorers(scores);
+	public ArrayList<String> getWinners(){
+		return highestScorers(scores);
 	}
 	
 	@Override
@@ -149,8 +155,48 @@ public class GrabGame extends Game {
 		return s;
 	}
 
-	@Override
+	/*@Override
 	public boolean shouldEnd() {
+		return false;
+	}*/
+
+	@Override
+	public String[] getAliases() {
+		return null;
+	}
+
+	@Override
+	public DyeColor[] getSpawnColors() {
+		return null;
+	}
+
+	@Override
+	public WorldLocation[] getLocationTypes() {
+		return null;
+	}
+
+	@Override
+	public boolean doFallDamage() {
+		return false;
+	}
+
+	@Override
+	public boolean doDrownDamage() {
+		return false;
+	}
+
+	@Override
+	public int getMinPlayers() {
+		return 2;
+	}
+
+	@Override
+	public int getMaxPlayers() {
+		return 8;
+	}
+
+	@Override
+	public boolean allowJoinInProgress() {
 		return false;
 	}
 }

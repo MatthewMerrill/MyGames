@@ -1,23 +1,29 @@
 package xenar47.bukkit.mygames;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-
-import xenar47.bukkit.mygames.games.DMGame;
-import xenar47.bukkit.mygames.games.GrabGame;
-import xenar47.bukkit.mygames.games.TDMGame;
-import xenar47.bukkit.mygames.games.TagGame;
-import xenar47.bukkit.mygames.world.WorldConfigManager;
-
-import org.bukkit.*;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
-import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
+
+import xenar47.bukkit.mygames.api.Game;
+import xenar47.bukkit.mygames.chat.ChatManager;
+import xenar47.bukkit.mygames.chat.DefaultChatManager;
+import xenar47.bukkit.mygames.command.CommandMap;
+import xenar47.bukkit.mygames.command.MyGamesCommandMap;
+import xenar47.bukkit.mygames.impl.games.DMGame;
+import xenar47.bukkit.mygames.impl.games.GrabGame;
+import xenar47.bukkit.mygames.impl.games.TDMGame;
+import xenar47.bukkit.mygames.impl.games.TagGame;
+import xenar47.bukkit.mygames.listeners.InventoryMenuListener;
+import xenar47.bukkit.mygames.listeners.LobbyListener;
+import xenar47.bukkit.mygames.listeners.SignListener;
+import xenar47.bukkit.mygames.world.WorldConfigManager;
+import xenar47.bukkit.mygames.world.WorldManager;
 
 /**
  * @author Xenarthran47
@@ -28,13 +34,18 @@ public class MyGames extends JavaPlugin {
 	public static final int METADATA_GAME = 0;
 
 	MetadataManager mm;
-	WorldConfigManager wcm;
-	GameConfigManager gcm;
+	WorldManager wm;
+	ConfigManager cm;
+	ChatManager chatManager;
+	
+	LobbyManager lm;
+	LobbyListener ll;
+	
+	InventoryMenuListener iml;
+	SignListener sl;
+	
+	CommandMap commandMap;
 
-	BasePlayerListener ll;
-
-	HashMap<String, GameManager> games;
-	HashMap<String, String> aliases;
 	
 	public static MyGames getInstance() {
 		Plugin plugin = Bukkit.getPluginManager().getPlugin("MyGames");
@@ -45,190 +56,30 @@ public class MyGames extends JavaPlugin {
 		
 		return null;
 	}
-
-	public void onEnable() {
-		mm = new MetadataManager(this);
-		wcm = new WorldConfigManager(this);
-		wcm.loadWorlds();
-		gcm = new GameConfigManager(this);
-
-		ll = new BasePlayerListener(this);
-		Bukkit.getPluginManager().registerEvents(ll, this);
-
-		games = new HashMap<String, GameManager>();
-		aliases = new HashMap<String, String>();
-		
-		addGame(new GameManager(this, "DeathMatch", 	DMGame.class, "DM"));
-		addGame(new GameManager(this, "TeamDeathMatch", TDMGame.class, "TDM"));
-		addGame(new GameManager(this, "Tag", 			TagGame.class));
-		addGame(new GameManager(this, "Grab", 			GrabGame.class));
-
-		for (Player player : Bukkit.getOnlinePlayers()) {
-			toLobby(player);
-			player.sendMessage(ChatColor.GRAY.toString()
-					+ ChatColor.ITALIC.toString()
-					+ "Welcome back to MyGames; the plugin is being enabled.");
-		}
-	}
-
-	public void onDisable() {
-
-		for (Player player : Bukkit.getOnlinePlayers()) {
-			toLobby(player);
-			ScoreboardManager.remove(player);
-			player.sendMessage(ChatColor.GRAY.toString()
-					+ ChatColor.ITALIC.toString()
-					+ "Sorry for any inconvenience; the plugin is being disabled.");
-		}
-
-		wcm.saveWorlds();
-		gcm.saveConfig();
-		
-		for (GameManager gm : games.values()) {
-			gm.stopGame();
-		}
-		games.clear();
-		
-		HandlerList.unregisterAll(this);
-	}
-
-	public GameManager getGameManager(String game) {
-		
-		if (aliases.containsKey(game.toLowerCase()))
-			game = aliases.get(game.toLowerCase());
-		
-		if (games.containsKey(game.toLowerCase()))
-			return games.get(game.toLowerCase());
-		return null;
-	}
-	
-	public void addGame(GameManager gm) {
-		if (gcm.getGameEnabled(gm.getName())) {
-			games.put(gm.getName().toLowerCase(), gm);
-			
-			this.getLogger().info("Added game: "+gm.getName());
-			
-			String[] aliases = gm.getAliases();
-			if (aliases != null)
-				for (String alias : aliases)
-					this.aliases.put(alias.toLowerCase(), gm.getName().toLowerCase());
-		}
-	}
-	
-	public void removeGame(GameManager gm) {
-		if (games.containsKey(gm.getName().toLowerCase()))
-			games.remove(gm.getName().toLowerCase());
-	}
-	
-	public boolean hasGame(String game) {
-		return (games.containsKey(game.toLowerCase()) || aliases.containsKey(game.toLowerCase()));
-	}
-	
-	public ArrayList<String> getGames() {
-		
-		ArrayList<String> names = new ArrayList<String>();
-		for (String string : games.keySet()) {
-			Bukkit.getLogger().info(string);
-			if (string != null && !string.trim().equalsIgnoreCase("")){
-				//Bukkit.getLogger().info(string);
-				names.add(games.get(string).getName());
-			}
-		}
-		
-		return names;
-	}
-	
-	@Override
+	/*@Override
 	public boolean onCommand(CommandSender sender, Command command,
 			String label, String[] args) {
-
-		if (label.equalsIgnoreCase("join")) {
-
-			if (!(sender instanceof Player)) {
-				sender.sendMessage(ChatColor.RED
-						+ "You must be a player to use this command.");
-				return true;
+		
+		if (args.length == 0) {
+			emptyArgs(sender);
+		} else {
+			CommandExecutor exec = executors.get(args[0]);
+			if (exec != null) {
+				
+				
+				
+				return (exec.onCommand(sender, new PluginCommand(args[0], mygames), args[0], args2));
 			}
+			return false;
+		}
+		else if (args[0].equalsIgnoreCase("setup")) {
+			setup(sender, args);
+		}
+		else if (args[0].equalsIgnoreCase("join")) {
+			
+		}
 
-			if (args.length != 1) {
-				sender.sendMessage(ChatColor.RED + "/join [game]");
-				sender.sendMessage(ChatColor.RED
-						+ "What games are running? /list");
-				return true;
-			}
-
-			Player player = (Player) sender;
-
-			GameManager gm = getGameManager(args[0]);
-			if (gm == null) {
-				sender.sendMessage(ChatColor.RED + "Could not find game \""
-						+ ChatColor.GREEN + args[0] + ChatColor.RED + "\"!");
-				sender.sendMessage(ChatColor.RED
-						+ "What games are running? /list");
-			}
-			else
-				gm.joinGame(player);
-
-			return true;
-		} else if (label.equalsIgnoreCase("start")) {
-
-			if (args.length != 1) {
-				sender.sendMessage(ChatColor.RED + "/start [game]");
-				sender.sendMessage(ChatColor.RED
-						+ "What games are running? /list");
-				return true;
-			}
-
-			GameManager gm = getGameManager(args[0]);
-			if (gm == null) {
-				sender.sendMessage(ChatColor.RED + "Could not find game \""
-						+ ChatColor.GREEN + args[0] + ChatColor.RED + "\"!");
-				sender.sendMessage(ChatColor.RED
-						+ "What games are running? /list");
-			}
-			else
-				gm.startGame();
-
-			return true;
-		} else if (label.equalsIgnoreCase("setup")) {
-
-			if (!(sender instanceof Player)) {
-				sender.sendMessage(ChatColor.RED
-						+ "You must be a player to use this command.");
-				return true;
-			}
-
-			Player player = (Player) sender;
-
-			if (!(player.isOp())) {
-				sender.sendMessage(ChatColor.RED
-						+ "Need OP for that. Plea nerf.");
-				return true;
-			}
-
-			toSetup(player);
-
-			return true;
-		}else if (label.equalsIgnoreCase("play")) {
-
-			if (!(sender instanceof Player)) {
-				sender.sendMessage(ChatColor.RED
-						+ "You must be a player to use this command.");
-				return true;
-			}
-
-			Player player = (Player) sender;
-
-			if (!(player.isOp())) {
-				sender.sendMessage(ChatColor.RED
-						+ "Need OP for that. Plea nerf.");
-				return true;
-			}
-
-			toLobby(player);
-
-			return true;
-		} else if (label.equalsIgnoreCase("setworld")) {
+		if (label.equalsIgnoreCase("setworld")) {
 
 			if (!(sender instanceof Player)) {
 				sender.sendMessage(ChatColor.RED
@@ -263,8 +114,8 @@ public class MyGames extends JavaPlugin {
 				return true;
 			}
 
-			World world = ((Player) sender).getWorld();
-			wcm.setWorldOptions(world);
+	//		World world = ((Player) sender).getWorld();
+//			wm.setWorldOptions(world);
 
 			return true;
 		} else if (label.equalsIgnoreCase("addworld")) {
@@ -280,7 +131,7 @@ public class MyGames extends JavaPlugin {
 				return true;
 			}
 			World world = ((Player) sender).getWorld();
-			wcm.addToList(world.getName());
+			mygames.getWorldMgr().addToList(world.getName());
 
 			return true;
 		} else if (label.equalsIgnoreCase("saveworld")) {
@@ -299,29 +150,202 @@ public class MyGames extends JavaPlugin {
 			world.save();
 
 			return true;
-		} else if (label.equalsIgnoreCase("list")) {
-			ArrayList<String> games = getGames();
-			String gameList = Utils.list(games, ChatColor.GRAY, ChatColor.GREEN);
-			
-			if (gameList == null || gameList.equalsIgnoreCase(""))
-				gameList = "None!";
-			else
-				gameList += ChatColor.GRAY + ".";
-			
-			sender.sendMessage(ChatColor.GRAY + "Games running: " + gameList);
+		}
+
+		return false;
+	}*/
+
+	public void onEnable() {
+		mm = new MetadataManager(this);
+		wm = new WorldManager(this);
+		cm = new ConfigManager(this);
+		lm = new LobbyManager(this);
+		chatManager = new DefaultChatManager();
+		
+		commandMap = new MyGamesCommandMap(this);
+		
+		iml = new InventoryMenuListener();
+		Bukkit.getPluginManager().registerEvents(iml, this);
+		
+		if (cm.isLobbyListenerEnabled()) {
+			ll = new LobbyListener(this);
+			Bukkit.getPluginManager().registerEvents(ll, this);
+		}
+		if (cm.isSignListenerEnabled()) {
+			sl = new SignListener(this);
+			Bukkit.getPluginManager().registerEvents(sl, this);
+		}
+		
+		Bukkit.getPluginCommand("MyGames").setExecutor(commandMap);
+		/*Bukkit.getPluginCommand("join").setExecutor(lm);
+		Bukkit.getPluginCommand("start").setExecutor(lm);
+		Bukkit.getPluginCommand("play").setExecutor(lm);
+		Bukkit.getPluginCommand("setup").setExecutor(lm);
+		Bukkit.getPluginCommand("listGames").setExecutor(lm);
+		*/
+		addGame(new DMGame());
+		addGame(new TDMGame());
+		addGame(new TagGame());
+		addGame(new GrabGame());		
+		
+
+		if (cm.isLobbyListenerEnabled()) {
+			for (Player player : Bukkit.getOnlinePlayers()) {
+				toLobby(player);
+				player.sendMessage(ChatColor.GRAY.toString()
+						+ ChatColor.ITALIC.toString()
+						+ "Welcome back to MyGames; the plugin is being enabled.");
+			}
+		}
+	}
+
+	public void onDisable() {
+		
+		if (cm.isLobbyListenerEnabled()) {
+			for (Player player : Bukkit.getOnlinePlayers()) {
+				toLobby(player);
+				//ScoreboardManager.remove(player);
+				player.sendMessage(ChatColor.GRAY.toString()
+						+ ChatColor.ITALIC.toString()
+						+ "Sorry for any inconvenience; the plugin is being disabled.");
+			}
+		}
+
+		wm.onDisable();
+		cm.saveConfig();
+		
+		lm.stopAll();
+		
+		HandlerList.unregisterAll(this);
+	}
+	/*
+	@Override
+	public boolean onCommand(CommandSender sender, Command command,
+			String label, String[] args) {
+
+		if (label.equalsIgnoreCase("setworld")) {
+
+			if (!(sender instanceof Player)) {
+				sender.sendMessage(ChatColor.RED
+						+ "You must be a player to use this command.");
+				return true;
+			}
+
+			Player player = (Player) sender;
+			if (!(player.isOp())) {
+				sender.sendMessage(ChatColor.RED
+						+ "Need OP for that. Plea nerf.");
+				return true;
+			}
+
+			try {
+				player.teleport(Bukkit.getWorld(args[0]).getSpawnLocation());
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+
+			return true;
+		} else if (label.equalsIgnoreCase("prepworld")) {
+
+			if (!(sender instanceof Player)) {
+				sender.sendMessage(ChatColor.RED
+						+ "You must be a player to use this command.");
+				return true;
+			}
+			if (!(((Player) sender).isOp())) {
+				sender.sendMessage(ChatColor.RED
+						+ "Need OP for that. Plea nerf.");
+				return true;
+			}
+
+	//		World world = ((Player) sender).getWorld();
+//			wm.setWorldOptions(world);
+
+			return true;
+		} else if (label.equalsIgnoreCase("addworld")) {
+
+			if (!(sender instanceof Player)) {
+				sender.sendMessage(ChatColor.RED
+						+ "You must be a player to use this command.");
+				return true;
+			}
+			if (!(((Player) sender).isOp())) {
+				sender.sendMessage(ChatColor.RED
+						+ "Need OP for that. Plea nerf.");
+				return true;
+			}
+			World world = ((Player) sender).getWorld();
+			wm.addToList(world.getName());
+
+			return true;
+		} else if (label.equalsIgnoreCase("saveworld")) {
+
+			if (!(sender instanceof Player)) {
+				sender.sendMessage(ChatColor.RED
+						+ "You must be a player to use this command.");
+				return true;
+			}
+			if (!(((Player) sender).isOp())) {
+				sender.sendMessage(ChatColor.RED
+						+ "Need OP for that. Plea nerf.");
+				return true;
+			}
+			World world = ((Player) sender).getWorld();
+			world.save();
+
 			return true;
 		}
 
 		return false;
+	}*/
+	
+	public void addGame(Game game) {
+		if (game.getName().length() > 13) {
+			getLogger().severe("Unable to enable game:"+game.getName()
+					+". Base name should not exceed 13 characters.");
+			return;
+		}
+		if (cm.isGameEnabled(game.getName())) {
+			lm.addGame(game);
+		}
+	}
+	public void removeGame(Game game) {
+		lm.removeGame(game);
+	}
+	
+	public Game getGame(String game) {
+		return lm.getGame(game);
 	}
 
+	/*
+	 * <Managers>
+	 */
+	
 	public MetadataManager getMetaMgr() {
 		return mm;
 	}
 
-	public WorldConfigManager getWorldMgr() {
-		return wcm;
+	public WorldManager getWorldMgr() {
+		return wm;
 	}
+	
+	public LobbyManager getLobbyMgr() {
+		return lm;
+	}
+	
+	public ChatManager getChatManager() {
+		return chatManager;
+	}
+	
+	public void setChatManager(ChatManager chatManager) {
+		this.chatManager = chatManager;
+	}
+	
+	/*
+	 * </Managers>
+	 * 
+	 * <PlayerManagement>
+	 */
 
 	public void toLobby(Player player) {
 		player.setHealth(20);
@@ -330,9 +354,11 @@ public class MyGames extends JavaPlugin {
 		player.getInventory().setArmorContents(null);
 		player.getInventory().clear();
 
-		player.setGameMode(GameMode.CREATIVE);
-		player.setAllowFlight(false);
-		player.setCanPickupItems(false);
+		if (cm.isLobbyListenerEnabled()) {
+			player.setGameMode(GameMode.CREATIVE);
+			player.setAllowFlight(false);
+			player.setCanPickupItems(false);
+		}
 
 		player.setFireTicks(-1);
 		player.getInventory().clear();
@@ -344,7 +370,7 @@ public class MyGames extends JavaPlugin {
 			mm.setInLobby(player);
 		} catch (Exception e) {
 		}
-		ScoreboardManager.remove(player);
+		//ScoreboardManager.remove(player);
 	}
 
 	public void toSetup(Player player) {
@@ -359,7 +385,11 @@ public class MyGames extends JavaPlugin {
 		player.setCanPickupItems(true);
 
 		player.setFireTicks(-1);
-
+		
+		player.getInventory().setItem(0, WorldConfigManager.getConfigMenuItem());
+		
+		//TODO: Setup Inventory Menu
+/*
 		PlayerInventory inv = player.getInventory();
 		inv.setItem(0, WorldConfigManager.getSpawnTool(DyeColor.RED));
 		inv.setItem(1, WorldConfigManager.getSpawnTool(DyeColor.BLUE));
@@ -367,15 +397,21 @@ public class MyGames extends JavaPlugin {
 		inv.setItem(3, WorldConfigManager.getSpawnTool(DyeColor.YELLOW));
 		inv.setItem(4, WorldConfigManager.getBoundsTool(1));
 		inv.setItem(5, WorldConfigManager.getBoundsTool(2));
-
+*/
 		try {
 			mm.setInSetup(player);
 		} catch (Exception e) {
 		}
-		ScoreboardManager.remove(player);
+		//ScoreboardManager.remove(player);
 	}
 
 	public Location lobbyLocation() {
-		return Bukkit.getWorlds().get(0).getSpawnLocation();
+		return cm.getSpawnLocation();
+		//return Bukkit.getWorlds().get(0).getSpawnLocation();
 	}
+	
+	/*
+	 * </PlayerManagement>
+	 */
+	
 }

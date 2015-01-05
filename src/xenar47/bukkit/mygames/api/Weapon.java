@@ -6,10 +6,16 @@ import java.util.List;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TNTPrimed;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.metadata.FixedMetadataValue;
+
+import xenar47.bukkit.mygames.MyGames;
 
 public abstract class Weapon {
 	
@@ -26,8 +32,8 @@ public abstract class Weapon {
 	public abstract String getName();
 	public abstract void registerNecessaryListeners();
 	
-	public abstract void primary(Game game, Player player);
-	public abstract void secondary(Game game, Player player);
+	public abstract boolean primary(Game game, Player player);
+	public abstract boolean secondary(Game game, Player player);
 
 	/**
 	 * Called when a player uses this weapon in a melee attack on someone else.
@@ -46,6 +52,15 @@ public abstract class Weapon {
 	public final boolean isRegistered() {
 		return isRegistered(getName());
 	}
+	
+	public void generateExplosion(Location loc, float power, Player player) {
+		TNTPrimed tnt = (TNTPrimed) loc.getWorld().spawnEntity(loc, EntityType.PRIMED_TNT);
+		tnt.setFuseTicks(1);
+		tnt.setYield(power);
+		tnt.setIsIncendiary(false);
+		tnt.setMetadata("Owner", new FixedMetadataValue(MyGames.getInstance(), player.getName()));
+	}
+	
 	public static final boolean isRegistered(String name) {
 		return registeredWeapons.containsKey(name); 
 	}
@@ -55,12 +70,12 @@ public abstract class Weapon {
 		if (weapon.isRegistered())
 			return true;
 		
-		try  {
+		try{
 			registeredWeapons.put(weapon.getName(), weapon);
 			weapon.registerNecessaryListeners();
 			return true;
 		} catch (Exception e) {
-			Bukkit.broadcastMessage("Error while registering Weapon: " + weapon.getName());
+			Bukkit.getLogger().severe("Error while registering Weapon: " + weapon.getName());
 			return false;
 		}
 	}
@@ -83,7 +98,7 @@ public abstract class Weapon {
 			im.setDisplayName(ChatColor.RED + weapon.getName());
 			
 			List<String> lores = new ArrayList<String>();
-			lores.add("CustomWeapon");
+			lores.add("Weapon");
 			lores.add(weapon.getName());
 			
 			im.setLore(lores);
@@ -117,7 +132,7 @@ public abstract class Weapon {
 		try {
 			List<String> lore = itemStack.getItemMeta().getLore();
 			
-			if (lore.get(0).equalsIgnoreCase("CustomWeapon")) {
+			if (lore.get(0).equalsIgnoreCase("Weapon")) {
 				return lore.get(1);
 			}
 		} catch(Exception e) {

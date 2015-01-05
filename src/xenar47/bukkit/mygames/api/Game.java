@@ -2,26 +2,28 @@ package xenar47.bukkit.mygames.api;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Random;
 import java.util.UUID;
 
-import xenar47.bukkit.mygames.*;
-import xenar47.bukkit.mygames.ScoreboardManager.GameScore;
-import xenar47.bukkit.mygames.world.WorldConfigManager.LOCATIONS;
-
-import org.bukkit.*;
-import org.bukkit.entity.Arrow;
-import org.bukkit.entity.Item;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.DyeColor;
+import org.bukkit.GameMode;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.player.*;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+
+import xenar47.bukkit.mygames.MetadataManager;
+import xenar47.bukkit.mygames.MyGames;
+import xenar47.bukkit.mygames.event.GameUpdateEvent;
+import xenar47.bukkit.mygames.event.GameUpdateEvent.GameEventType;
+import xenar47.bukkit.mygames.listeners.GameListener;
+import xenar47.bukkit.mygames.task.CountdownTask;
+import xenar47.bukkit.mygames.task.GameTimer;
+import xenar47.bukkit.mygames.world.location.WorldLocation;
 
 /**
  * @author Xenarthran47
@@ -30,19 +32,29 @@ import org.bukkit.scheduler.BukkitTask;
 interface IGame {
 
 	public String getName();
+	public String[] getAliases();
+	
+	public DyeColor[] getSpawnColors();
+	public WorldLocation[] getLocationTypes();
+	
+	public boolean doFallDamage();
+	public boolean doDrownDamage();
+	
+	public int getMinPlayers();
+	public int getMaxPlayers();
+	
+	public boolean allowJoinInProgress();
 
 	public void prepareGame();
-
 	public void preparePlayer(Player player);
 
-	public void startGame(GameManager gameManager);
-	public boolean isRunning();
-	public void stopGame();
-	
+	//public void startGame(GameManager gameManager);
+	//public boolean isRunning();
+	//public void stopGame();
 	
 	public int getPlayTime();
 	public int getWarmupTime();
-	public int getSecsPerTick();
+	public double getSecsPerTick();
 	
 	public void warmupTick();
 	public void tick();
@@ -54,8 +66,8 @@ interface IGame {
 	public boolean playerDamagePlayer(Player attacker, Player victim);
 	public void playerKilled(Player player);
 	
-	public boolean shouldEnd();
-	public ArrayList<Player> getWinners();
+	//public boolean shouldEnd();
+	public ArrayList<String> getWinners();
 	
 	/**
 	 * Return array of scores containing desired ScoreBoard display.
@@ -67,34 +79,71 @@ interface IGame {
 	 */
 	public ArrayList<GameScore> getSideScores();
 	public ArrayList<GameScore> getPlayerScores();
+	public GameScore getPlayerScore(Player player);
 }
 
-public abstract class Game implements IGame, Listener {
+public abstract class Game implements IGame {
 
 	protected final MyGames mygames;
+	private GameListener listener;
+	
 	private ArrayList<UUID> players = new ArrayList<UUID>();
-
-	ScoreboardManager sbm;
-	GameManager gm;
+	private HashMap<UUID, Integer> scores = new HashMap<UUID, Integer>();
 	
-	private static final int ticksPerSec = 20;
+	SidebarManager sbm;
 	
-	private final int maxPlayTime;
-	private final int warmupTime;
-	private final int secsPerTick;
+	//private static final int ticksPerSec = 20;
 	
-	private int secondsPlayed = 0;
+//	private final int maxPlayTime;
+//	private final int warmupTime;
+//	private final double secsPerTick;
 	
-	boolean showHealth = true;
-
-	public Game() {
-		
+	private CountdownTask countdownTask;
+	private GameTimer gameTimer;
+	
+	private static HashMap<String, Integer> indeces = new HashMap<String, Integer>();
+	private final int id;
+	
+	public Game() {		
 		this.mygames = MyGames.getInstance();
-		sbm = new ScoreboardManager(mygames, this);
 		
-		maxPlayTime = getPlayTime();
-		warmupTime = getWarmupTime();
-		secsPerTick = getSecsPerTick();
+		sbm = new SidebarManager(this);
+		
+		if (!indeces.containsKey(getName())) {
+			indeces.put(getName(), 1);
+		}
+		
+		id = indeces.put(getName(), indeces.get(getName()) + 1);
+		
+//		maxPlayTime = getPlayTime();
+//		warmupTime = getWarmupTime();
+//		secsPerTick = getSecsPerTick();
+		
+		countdownTask = new CountdownTask(mygames, this, 40);		
+		gameTimer = new GameTimer(mygames, this);
+	}
+	
+	public final int getId() {
+		return id;
+	}
+	
+	public final String getUniqueName() {
+		return getName() + id;
+	}
+	
+	/**
+	 * Convenience method. Returns the UniqueName colored Green/Blue/Red
+	 * Green: Game not started yet.
+	 * Blue: In progress, can join.
+	 * Red: In progress, can not join.
+	 */
+	public String getColoredName() {
+		ChatColor cc = ChatColor.GREEN;
+		
+		if (isRunning())
+			cc = (allowJoinInProgress())?ChatColor.BLUE:ChatColor.RED;
+		
+		return cc + getUniqueName();
 	}
 
 	/****************************************************
@@ -103,123 +152,69 @@ public abstract class Game implements IGame, Listener {
 	 * 
 	 ***************************************************/
 	
-	@Override
-	public void prepareGame() {
-		ArrayList<UUID> players = this.getPlayers();
-		for (UUID uuid : players) {
+	public abstract void prepareGame();
+
+	public final void startGame() {
+		
+		if (worldKey == null) {
+			if (hasWorlds()) {
+				findRandomWorld();
+				loadWorld();
+			} else {
+				sendMessageToPlayers(mygames.getChatManager().gameHasNoWorlds(this));
+				return;
+			}
+		}
+		
+		prepareGame();
+		
+		for (UUID uuid : getPlayers()) {
 			Player player = Bukkit.getPlayer(uuid);
-			
+
 			player.getInventory().clear();
 			player.setGameMode(GameMode.SURVIVAL);
 			player.setHealth(20);
-			preparePlayer(player);
-		}
-	}
-
-	@Override
-	public void startGame(GameManager gm) {
-
-		if (showHealth)
-			sbm.showHealth();
-		sbm.show();
-
-		this.gm = gm;
-		this.isRunning = true;
-
-		for (UUID uuid : getPlayers()) {
-			Player player = Bukkit.getPlayer(uuid);
 			player.teleport(getSpawnLocation(player));
+			
+			player.sendMessage(mygames.getChatManager().gameStart(this));
 		}
 		
-		Bukkit.getPluginManager().registerEvents(this, mygames);
-		startTimer();
-	}
-	
-	BukkitTask task;
-	BukkitRunnable runnable;
-
-	public void startTimer() {
-		runnable = new BukkitRunnable() {
-			@Override
-			public void run() {
-				secondsPlayed += secsPerTick;
-				
-				if ( secondsPlayed < warmupTime ) {
-					warmupTick();
-				} else {
-					tick();
-				}
-				
-				if ((shouldEnd()) || ((maxPlayTime != -1) && (secondsPlayed >= warmupTime + maxPlayTime)) ) {
-					Bukkit.broadcastMessage("stopping");
-					stopGame();
-				}
-
-				updateScores();
-			}
-		};
+		listener = new GameListener(this, mygames);
+		Bukkit.getPluginManager().registerEvents(listener, mygames);
 		
-		task = Bukkit.getScheduler().runTaskTimerAsynchronously(mygames, runnable, 0, ticksPerSec * secsPerTick);
-	}
-
-	private boolean isRunning;
-
-	@Override
-	public boolean isRunning() {
-		return isRunning;
+		gameTimer.start();
 	}
 	
-	public boolean isWarmup() {
-		return (secondsPlayed < warmupTime);
+	public final boolean isRunning() {
+		return gameTimer.isRunning();
+	}
+	
+	public final boolean isWarmup() {
+		return gameTimer.isWarmup();
 	};
 	
-	public int getSecondsPlayed() {
-		return secondsPlayed;
-	}
-
-	@Override
-	public void stopGame() {
-		this.isRunning = false;
+	public final void stopGame() {
 		
-		if (task != null)
-			task.cancel();
+		countdownTask.stop();
+		gameTimer.stop();
 		
 		sbm.hide();
-
-		for (UUID uuid : getPlayers())
-			sbm.removeEntry(uuid);
-
-		ArrayList<Player> winners = getWinners();
-		if (winners != null) {		
-			if (winners.size() >= 1) {
-				if (winners.size() == 1) {
-					Bukkit.broadcastMessage(ChatColor.GREEN
-							+ "[" + getName()+ ChatColor.GREEN + "]"
-							+ ChatColor.BLUE + Bukkit.getPlayer(getPlayers().get(0))
-									.getDisplayName() + ChatColor.GRAY + " takes the victory!");
-				} else if (winners.size() == 2) {
-					Bukkit.broadcastMessage(ChatColor.GREEN + winners.get(0).getDisplayName() + ChatColor.GRAY + " and "
-							+ ChatColor.GREEN + winners.get(1).getDisplayName() + ChatColor.GRAY + " take the victory!");
-				} else {
-					String message = "";
-					for (int i = 0; i < winners.size(); i++) {
-						message +=  ChatColor.GRAY + ((i==0)?"":", ")
-								+ ((i==winners.size()-1)?"and ":"") 
-								+ ChatColor.GREEN + winners.get(i);
-					}
-					Bukkit.broadcastMessage(message);
-				}
-			} else {
-				Bukkit.broadcastMessage(ChatColor.GRAY
-						+ "All participants have died... No Winner!");
-			}
-		} else {
-			Bukkit.broadcastMessage(ChatColor.GRAY
-					+ "Game ended in mysterious circumstances... No Winner!");
-		}
 		
-		if (gm != null)
-			gm.stopGame();
+		Bukkit.broadcastMessage(mygames.getChatManager().gameOver(this, getWinners()));
+		
+		unregisterListeners();
+		
+		for (UUID uuid : players) {
+			mygames.toLobby(Bukkit.getPlayer(uuid));
+		}
+		players.clear();
+	}
+	
+	/**
+	 * If you override this, make sure to call super.unregisterListeners()!!!
+	 */
+	public void unregisterListeners() {
+		HandlerList.unregisterAll(listener);
 	}
 	
 	@Override
@@ -233,7 +228,7 @@ public abstract class Game implements IGame, Listener {
 	}
 	
 	@Override
-	public int getSecsPerTick() {
+	public double getSecsPerTick() {
 		return 5;
 	}
 
@@ -245,38 +240,51 @@ public abstract class Game implements IGame, Listener {
 	 * 
 	 ***************************************************/
 	
+	protected String worldKey;
 	protected World world;
-	public void setWorld(World world) {
-		this.world = world;
+	
+	public boolean hasWorlds() {
+		return mygames.getWorldMgr().getCompatibleWorlds(this).size() > 0;
+	}
+	public final void findRandomWorld() {
+		String key = mygames.getWorldMgr().getRandomKey(this);
+		if (key != null)
+			setWorldKey(key);
+	}
+	
+	public final void setWorldKey(String key) {		
+		if (!isRunning()) {
+			this.worldKey = key;
+		}
+	}
+	public final String getWorldKey() {
+		return worldKey;
+	}
+	public final World getWorld() {
+		return world;
+	}
+	
+	public final void loadWorld() {
+		if (world == null)
+			world = mygames.getWorldMgr().getWorldCopy(worldKey);
+	}
+	
+	public final void unloadWorld() {	
+		if (world == null)
+			return;
+		
+		//TODO: Change worlds without returning to lobby
+		for (Player player : world.getEntitiesByClass(Player.class))
+			mygames.toLobby(player);
+		
+		/**
+		 * Don't change this. Will delete world contents if changed incorrectly.
+		 */
+		mygames.getWorldMgr().destroyCopy(world.getName());
 	}
 
 	public Location getSpawnLocation(Player player) {
-
-		LOCATIONS l = LOCATIONS.RED;
-
-		Random random = new Random();
-		int i = random.nextInt(4);
-
-		switch (i) {
-		case (0): {
-			l = LOCATIONS.RED;
-			break;
-		}
-		case (1): {
-			l = LOCATIONS.BLUE;
-			break;
-		}
-		case (2): {
-			l = LOCATIONS.GREEN;
-			break;
-		}
-		default: {
-			l = LOCATIONS.YELLOW;
-			break;
-		}
-		}
-
-		return (TeamWorld.getLocation(mygames.getWorldMgr(), world, l));
+		return mygames.getWorldMgr().getRandomSpawn(world);
 	}
 
 	/****************************************************
@@ -287,23 +295,171 @@ public abstract class Game implements IGame, Listener {
 	 * 
 	 ***************************************************/
 
-	public void setPlayers(ArrayList<UUID> players) {
-		this.players = players;
+	public boolean canJoin(Player player) {
+		
+		if (players.contains(player.getUniqueId())) {
+			player.sendMessage(mygames.getChatManager().joinLobbyAlreadyJoined(this));
+			return false;
+		}
+		
+		if (players.size() >= getMaxPlayers()){
+			player.sendMessage(mygames.getChatManager().joinLobbyFull(this));
+			return false;
+		}
+		
+		int mode = mygames.getMetaMgr().getMode(player);
+		if (mode == MetadataManager.INGAME || mode == MetadataManager.OTHER_GAME){
+			player.sendMessage(mygames.getChatManager().joinLobbyIngame(this));
+			return false;
+		}
+		
+		if (isRunning() && !allowJoinInProgress()) {
+			player.sendMessage(mygames.getChatManager().joinLobbyInProgress(this));
+			return false;
+		}
+		
+		return true;
 	}
 
+	public void joinGame(Player player) {
+		if (!canJoin(player))
+			return;
+
+		players.add(player.getUniqueId());
+		mygames.getLobbyMgr().joinedGame(player, this);
+		
+		if (getPlayersNeeded() > 0) {
+			sbm.playersNeeded();
+		} else if (!countdownTask.isRunning()) {
+			countdownTask.start();
+		}
+		
+		if (isRunning()) {
+			preparePlayer(player);
+		}
+		else {
+			//TODO: Is this a good idea? :/
+			/*if (players.size() == getMaxPlayers()) {
+				countdownTask.stop();
+				startGame();
+			}*/
+		}
+		
+		player.sendMessage(mygames.getChatManager().joinLobbySuccess(this));
+
+		GameUpdateEvent gue = new GameUpdateEvent(this.getName(), GameEventType.PLAYER_JOIN);
+		Bukkit.getServer().getPluginManager().callEvent(gue);
+	}
+	
+	public void leaveGame(Player player) {
+		if (!players.contains(player.getUniqueId()))
+			return;
+		
+		players.remove(player.getUniqueId());
+		mygames.getLobbyMgr().leftGame(player, this);
+
+		player.sendMessage(mygames.getChatManager().leaveLobby(this));
+		
+		if (getPlayersNeeded() > 0) {
+			sbm.playersNeeded();
+			
+			if (countdownTask.isRunning()) {
+				countdownTask.stop();
+			}
+		} else if (!countdownTask.isRunning()) {
+			countdownTask.start();
+		}
+
+		GameUpdateEvent gue = new GameUpdateEvent(this.getName(), GameEventType.PLAYER_LEAVE);
+		Bukkit.getServer().getPluginManager().callEvent(gue);
+	}
+	
+	public int getPlayersNeeded() {
+		int size = getPlayers().size();
+		return (size >= getMinPlayers())?(0):(getMinPlayers() - size);
+	}
+	
 	public final ArrayList<UUID> getPlayers() {
 		return players;
 	}
 
 	public final boolean hasPlayer(Player player) {
+		if (player == null)
+			return false;
 		return players.contains(player.getUniqueId());
 	}
 
-	public void removePlayer(Player player) {
+	/*public final void removePlayer(Player player) {
 		players.remove(player.getUniqueId());
 		sbm.removeEntry(player.getUniqueId());
 		mygames.toLobby(player);
+	}*/
+	
+	public final void sendMessageToPlayers(String string) {
+		for (UUID uuid : this.getPlayers()) {
+			Player player = Bukkit.getPlayer(uuid);
+			if (player != null)
+				player.sendMessage(string);
+		}
 	}
+	
+	@Override
+	public void preparePlayer(Player player) {
+		PlayerClass.setupPlayer(player);		
+	}
+	
+	public void updateEffects() {
+		for (UUID uuid : this.getPlayers()) {
+			Player player = Bukkit.getPlayer(uuid);
+			if (player != null) {
+				for (PotionEffect pe : player.getActivePotionEffects()) {
+					if (pe.getDuration() > 6666)
+						player.removePotionEffect(pe.getType());
+				}
+				
+				HashMap<PotionEffectType, Integer> effects = PlayerClass.getLastingEffects(player);
+				for (PotionEffectType type : effects.keySet()) {
+					player.addPotionEffect(new PotionEffect(type, 9999, effects.get(type)), true);
+				}
+			}
+		}
+	}
+	
+	public void respawnPlayer(Player player) {
+		
+		//player.setNoDamageTicks(60);
+				
+		if (this.hasPlayer(player.getKiller()))
+			sendMessageToPlayers(mygames.getChatManager().playerDeath(player, player.getKiller()));
+		else
+			sendMessageToPlayers(mygames.getChatManager().playerDeath(player));
+		
+		//Utils.fakeDeath(player.getLocation());
+		/*Packet205ClientCommand packet = new Packet205ClientCommand();
+        packet.a = 1;
+        ((CraftPlayer) player).getHandle().netServerHandler.a(packet);
+		//*/
+		player.getInventory().clear();
+		
+		Location spawnLoc = getSpawnLocation(player);
+		
+		if (spawnLoc.distanceSquared(player.getLocation())>1) {
+			sendMessageToPlayers("Sending " + player.getDisplayName() + " to respawn point.");
+			player.teleport(player.getLocation().add(0, -32, 0), TeleportCause.PLUGIN);
+			player.teleport(spawnLoc, TeleportCause.PLUGIN);
+		}
+
+		this.playerKilled(player);
+		
+		//if (shouldEnd())
+		//	stopGame();
+
+		player.setHealth(player.getMaxHealth());
+		player.setNoDamageTicks(0);
+
+		preparePlayer(player);
+	}
+
 
 	/****************************************************
 	 * 
@@ -313,19 +469,38 @@ public abstract class Game implements IGame, Listener {
 	 * 
 	 ***************************************************/
 
-	public void setShowHealth(boolean b) {
-		showHealth = b;
+	public final void setScore(UUID uuid, Integer score) {
+		scores.put(uuid, score);
 	}
 	
-	public void updateScores() {
-		sbm.update();
+	public final void addPoints(UUID uuid, Integer points) {
+		Integer prev = scores.get(uuid);
+		scores.put(uuid, prev + points);
+	}
+	
+	public final void removePoints(UUID uuid, Integer points) {
+		Integer prev = scores.get(uuid);
+		scores.put(uuid, prev - points);
+	}
+	
+	public GameScore getPlayerScore(Player player) {
+		return new GameScore(player.getName(), scores.get(player.getUniqueId()));
+	}
+	
+	@Override
+	public ArrayList<GameScore> getPlayerScores() {
+		ArrayList<GameScore> gameScores = new ArrayList<GameScore>();
+		for (UUID uuid : scores.keySet()) {
+			gameScores.add(getPlayerScore(Bukkit.getPlayer(uuid)));
+		}
+		return gameScores;
 	}
 	
 	/**
 	 * Orders the scores from highest to lowest
 	 * @return
 	 */
-	public ArrayList<GameScore> orderHighest(ArrayList<GameScore> scores) {
+	public static ArrayList<GameScore> orderHighest(ArrayList<GameScore> scores) {
 		ArrayList<GameScore> ordered = new ArrayList<GameScore>();
 		
 		for (GameScore score : scores) {
@@ -353,7 +528,7 @@ public abstract class Game implements IGame, Listener {
 	 * Orders the scores from lowest to highest
 	 * @return
 	 */
-	public ArrayList<GameScore> orderLowest(ArrayList<GameScore> scores) {
+	public static ArrayList<GameScore> orderLowest(ArrayList<GameScore> scores) {
 		ArrayList<GameScore> ordered = new ArrayList<GameScore>();
 		
 		for (GameScore score : scores) {
@@ -377,14 +552,14 @@ public abstract class Game implements IGame, Listener {
 		return ordered;
 	}
 	
-	public ArrayList<Player> highestScorers(HashMap<UUID, Integer> scores){
+	public static ArrayList<String> highestScorers(HashMap<UUID, Integer> scores){
 		
-		ArrayList<Player> winners = new ArrayList<Player>();
+		ArrayList<String> winners = new ArrayList<String>();
 		
 		if (scores.size() < 1) {
 			return null;
 		} else if (scores.size() == 1) {
-			winners.add(Bukkit.getPlayer((UUID)scores.keySet().toArray()[0]));
+			winners.add(Bukkit.getPlayer((UUID)scores.keySet().toArray()[0]).getName());
 			return winners;
 		}
 		
@@ -404,19 +579,19 @@ public abstract class Game implements IGame, Listener {
 		}
 		
 		for (UUID uuid : top)
-			winners.add(Bukkit.getPlayer(uuid));
+			winners.add(Bukkit.getPlayer(uuid).getName());
 		
 		return winners;
 	}
 	
-	public ArrayList<Player> lowestScorers(HashMap<UUID, Integer> scores){
+	public static ArrayList<String> lowestScorers(HashMap<UUID, Integer> scores){
 
-		ArrayList<Player> winners = new ArrayList<Player>();
+		ArrayList<String> winners = new ArrayList<String>();
 		
 		if (scores.size() < 1) {
 			return null;
 		} else if (scores.size() == 1) {
-			winners.add(Bukkit.getPlayer((UUID)scores.keySet().toArray()[0]));
+			winners.add(Bukkit.getPlayer((UUID)scores.keySet().toArray()[0]).getName());
 			return winners;
 		}
 		
@@ -436,176 +611,19 @@ public abstract class Game implements IGame, Listener {
 		}
 		
 		for (UUID uuid : top)
-			winners.add(Bukkit.getPlayer(uuid));
+			winners.add(Bukkit.getPlayer(uuid).getName());
 		
 		return winners;
 	}
 
+	public SidebarManager getSidebarManager() {
+		return sbm;
+	}
+
+
 	/****************************************************
 	 * 
 	 * </Scoreboard>
-	 * 
-	 * <Listeners>
-	 * 
-	 ***************************************************/
-	
-	@EventHandler
-	public void onHungerChange(FoodLevelChangeEvent event) {
-		Player player = Bukkit.getPlayer(event.getEntity().getUniqueId());
-		if (hasPlayer(player)) {
-			event.setFoodLevel(20);
-		}
-	}
-	
-	@EventHandler
-	public void onItemPickupEvent(PlayerPickupItemEvent event) {
-		Item item = event.getItem();
-		if (item instanceof Arrow) {
-			event.setCancelled(true);
-			item.remove();
-		}
-	}
-
-	@EventHandler
-	public void onPlayerMelee(EntityDamageByEntityEvent event) {
-		if (event.getDamager() instanceof Player
-				&& event.getEntity() instanceof Player) {
-
-			Player damager = (Player) event.getDamager();
-			Player victim = (Player) event.getEntity();
-
-			if (players.contains(damager.getUniqueId())
-					&& players.contains(victim.getUniqueId())) {
-
-				Weapon weapon = Weapon.parseWeapon(damager.getItemInHand());
-				if (weapon != null) {
-					event.setDamage(weapon.melee(this, damager, victim));
-				}
-				event.setCancelled(!playerDamagePlayer(damager, victim));
-			}
-		}
-	}
-
-	@EventHandler
-	public void onPlayerClick(PlayerInteractEvent event) {
-		Player player = event.getPlayer();
-		if (players.contains(player.getUniqueId())
-				&& Weapon.isWeapon(event.getItem())) {
-			
-			Weapon weapon = (Weapon) Weapon.parseWeapon(event.getItem());
-			Action action = event.getAction();
-
-			if (action == Action.LEFT_CLICK_AIR
-					|| action == Action.LEFT_CLICK_BLOCK) {
-				weapon.primary(this, player);
-			} else if (action == Action.RIGHT_CLICK_AIR
-					|| action == Action.RIGHT_CLICK_BLOCK) {
-				weapon.secondary(this, player);
-			}
-		}
-	}
-
-	@EventHandler
-	public void onPlayerInteract(PlayerInteractEntityEvent event) {
-		Player player = event.getPlayer();
-		if (players.contains(player.getUniqueId())) {
-			
-			Weapon weapon = Weapon.parseWeapon(player.getItemInHand());
-			if (weapon != null) {
-				event.setCancelled(!weapon.interact(this, player,
-						event.getRightClicked()));
-			}
-			
-			/*
-			if (player.getItemInHand().getData() instanceof WeaponData) {
-				WeaponData weapon = (WeaponData) player.getItemInHand().getData();
-				event.setCancelled(!weapon.interact(this, player,
-						event.getRightClicked()));
-			}*/
-		}
-	}
-
-	@EventHandler
-	public void onPlayerReload(PlayerDropItemEvent event) {
-		Player player = event.getPlayer();
-		if (hasPlayer(player)) {//players.contains(player.getUniqueId())) {
-				//&& player.getItemInHand().getData() instanceof WeaponData) {
-			//((WeaponData) player.getItemInHand().getData()).reload(this, player);
-			Weapon weapon = Weapon.parseWeapon(player.getItemInHand());
-			if (weapon != null) {
-				weapon.reload(this, player);
-			}
-		}
-	}
-
-	@EventHandler
-	public void onPlayerDeath(EntityDamageEvent event) {
-
-		if (!(event.getEntity() instanceof Player))
-			return;
-
-		Player player = (Player) event.getEntity();
-
-		if (!hasPlayer(player))
-			return;
-
-		if (player.getHealth() - event.getDamage() <= 0) {
-
-			Utils.fakeDeath(player.getLocation());
-			
-			player.teleport(getSpawnLocation(player));
-			preparePlayer(player);
-
-			this.playerKilled(player);
-			
-			if (shouldEnd())
-				stopGame();
-
-			event.setCancelled(true);
-			event.setDamage(0);
-
-			player.setHealth(player.getMaxHealth());
-		}
-
-	}
-
-	@EventHandler
-	public void onPlayerRespawn(PlayerRespawnEvent event) {
-		if (!hasPlayer(event.getPlayer()))
-			return;
-
-		event.setRespawnLocation(getSpawnLocation(event.getPlayer()));
-	}
-
-	/*@EventHandler
-	public void onArrowHit(ProjectileHitEvent event) {
-		if (event.getEntity() instanceof Arrow) {
-			Arrow arrow = (Arrow) event.getEntity();
-
-			// Weapons system not working - just make all explosive to look
-			// fancy
-			 if (arrow.getMetadata("Explosive").contains(true)) {
-			ProjectileSource ps = arrow.getShooter();
-
-			if (ps instanceof Player) {
-
-				Player player = (Player) ps;
-				if (!hasPlayer(player) || !isRunning())
-					return;
-
-				Location loc = arrow.getLocation();
-				arrow.getWorld().createExplosion(loc.getX(), loc.getY(),
-						loc.getZ(), .75f, false, false);
-				arrow.remove();
-			}
-			 }
-		}
-	}*/
-	
-
-	/****************************************************
-	 * 
-	 * </Listeners>
 	 * 
 	 ***************************************************/
 

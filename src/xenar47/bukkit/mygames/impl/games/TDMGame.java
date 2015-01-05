@@ -1,19 +1,17 @@
-package xenar47.bukkit.mygames.games;
+package xenar47.bukkit.mygames.impl.games;
 
 import java.util.ArrayList;
 
-import xenar47.bukkit.mygames.ScoreboardManager.GameScore;
-import xenar47.bukkit.mygames.api.TeamGame;
-
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scoreboard.Team;
+
+import xenar47.bukkit.mygames.api.GameScore;
+import xenar47.bukkit.mygames.api.TeamGame;
+import xenar47.bukkit.mygames.world.location.WorldLocation;
 
 public class TDMGame extends TeamGame {
 
@@ -23,7 +21,7 @@ public class TDMGame extends TeamGame {
 
 	@Override
 	public String getName() {
-		return "TeamDeathMatch";
+		return "TeamDM";
 	}
 
 	@Override
@@ -36,13 +34,13 @@ public class TDMGame extends TeamGame {
 		pi.setItem(0, sword);
 
 		ItemStack bow = new ItemStack(Material.BOW);
-		ItemMeta im = bow.getItemMeta();
-		im.setDisplayName(ChatColor.RED + "Explosive Bow");
-		bow.setItemMeta(im);
+		//ItemMeta im = bow.getItemMeta();
+		//im.setDisplayName(ChatColor.RED + "Explosive Bow");
+		//bow.setItemMeta(im);
 		pi.setItem(1, bow);
 
 		ItemStack arrows = new ItemStack(Material.ARROW);
-		arrows.setAmount(64);
+		arrows.setAmount(16);
 		pi.setItem(2, arrows);
 	}
 
@@ -56,31 +54,15 @@ public class TDMGame extends TeamGame {
 		
 		if (!hasPlayer(player))
 			return;
-
-		mygames.toLobby(player);
-		removePlayer(player);
 		
-		Bukkit.broadcastMessage(player.getDisplayName() + " has perished.");
+		this.addPoints(getTeam(player), 1);
+
 	}
 	
-	@Override
+	/*@Override
 	public boolean shouldEnd() {
-		if (getPopulatedTeams().size() == 1) {// if (playerLives.size() <= 1) {
-			if (getPopulatedTeams().size() == 1) {
-				Bukkit.broadcastMessage(ChatColor.BLUE
-						+ Bukkit.getPlayer(getPlayers().get(0))
-								.getDisplayName() + ChatColor.GRAY
-						+ " takes the victory!");
-				return true;
-			} else if (getPopulatedTeams().size() <= 0) {
-				Bukkit.broadcastMessage(ChatColor.GRAY
-						+ "All participants have died... No Winner!");
-				return true;
-			}
-		}
-
-		return false;
-	}
+		return getPopulatedTeams().size() <= 1;
+	}*/
 
 	@Override
 	public ArrayList<GameScore> getSideScores() {
@@ -101,12 +83,12 @@ public class TDMGame extends TeamGame {
 	}
 
 	@Override
-	public ArrayList<Player> getWinners() {
-		ArrayList<Player> winners = new ArrayList<Player>();
+	public ArrayList<String> getWinners() {
+		ArrayList<String> winners = new ArrayList<String>();
 		
 		for (Team team : getPopulatedTeams()) {
 			for (OfflinePlayer player : team.getPlayers()) {
-				winners.add(Bukkit.getPlayer(player.getUniqueId()));
+				winners.add(player.getName());
 			}
 		}
 		
@@ -115,14 +97,49 @@ public class TDMGame extends TeamGame {
 
 	@Override
 	public void warmupTick() {
-		// TODO Auto-generated method stub
-		
 	}
 
 	@Override
 	public void tick() {
-		// TODO Auto-generated method stub
-		
+	}
+
+	@Override
+	public String[] getAliases() {
+		return new String[]{"TDM", "TeamDeathMatch"};
+	}
+
+	@Override
+	public WorldLocation[] getLocationTypes() {
+		return null;
+	}
+
+	@Override
+	public boolean doFallDamage() {
+		return false;
+	}
+
+	@Override
+	public boolean doDrownDamage() {
+		return true;
+	}
+
+	@Override
+	public int getMinPlayers() {
+		return 4;
+	}
+
+	@Override
+	public int getMaxPlayers() {
+		return 24;
+	}
+
+	@Override
+	public boolean allowJoinInProgress() {
+		return false;
+	}
+
+	@Override
+	public void prepareGame() {
 	}
 
 }

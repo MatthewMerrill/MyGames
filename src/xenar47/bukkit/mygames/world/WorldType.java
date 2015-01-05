@@ -1,19 +1,18 @@
 package xenar47.bukkit.mygames.world;
 
-public class WorldType {
+import java.util.ArrayList;
 
-	private String typeName;
-	private boolean team_based;
-	private boolean has_capture_point;
-	private int max_entries;
+import org.bukkit.inventory.ItemStack;
 
-	public WorldType(boolean team_based, boolean has_capture_point,
-			int max_entries) {
+import xenar47.bukkit.mygames.world.location.SpawnLocation;
+import xenar47.bukkit.mygames.world.location.WorldLocation;
 
-		this.team_based = team_based;
-		this.has_capture_point = has_capture_point;
-		this.max_entries = max_entries;
-
-	}
+public interface WorldType {
+	
+	public abstract String name();
+	
+	public abstract ArrayList<SpawnLocation> getSpawnLocations();
+	public abstract ArrayList<WorldLocation> getCustomLocations();
+	public abstract ItemStack icon();
 
 }

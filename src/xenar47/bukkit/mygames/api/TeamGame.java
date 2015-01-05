@@ -3,63 +3,93 @@ package xenar47.bukkit.mygames.api;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import xenar47.bukkit.mygames.*;
-import xenar47.bukkit.mygames.ScoreboardManager.GameScore;
-import xenar47.bukkit.mygames.world.WorldConfigManager.LOCATIONS;
-
-import org.bukkit.*;
+import org.bukkit.Color;
+import org.bukkit.DyeColor;
+import org.bukkit.Location;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
+import org.bukkit.event.Listener;
 import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.material.Wool;
 import org.bukkit.scoreboard.Team;
 
-public abstract class TeamGame extends Game {
+import xenar47.bukkit.mygames.world.location.SpawnLocation;
 
-	Team red;
-	Team blue;
-	Team green;
-	Team yellow;
+public abstract class TeamGame extends Game implements Listener {
 
-	HashMap<String, Color> teamColors;
+	Team red = null;
+	Team blue = null;
+	Team green = null;
+	Team yellow = null;
+
+	HashMap<String, DyeColor> teamColors;
 	HashMap<String, Integer> teamPoints;
 
 	private boolean autoAssign;
-	private boolean autoArmor;
+	private boolean autoHelmet;
 
-	public TeamGame(boolean autoAssign, boolean autoArmor) {
-		teamColors = new HashMap<String, Color>();
+	public TeamGame(boolean autoAssign, boolean autoHelmet) {
+		this.autoAssign = autoAssign;
+		this.autoHelmet = autoHelmet;
+		
+		createTeams(true, true, true, true);
+	}
+	
+	public TeamGame(boolean autoAssign, boolean autoHelmet, boolean useRed, boolean useBlue, boolean useGreen, boolean useYellow) {
+		this.autoAssign = autoAssign;
+		this.autoHelmet = autoHelmet;
+		
+		createTeams(useRed, useBlue, useGreen, useYellow);
+	}
+	
+	private Team getTeam(String name){
+		if (sbm.scoreboard.getTeam(name) == null)
+			sbm.scoreboard.registerNewTeam(name);
+		
+		return sbm.scoreboard.getTeam(name);
+	}
+	
+	private void createTeams(boolean useRed, boolean useBlue, boolean useGreen, boolean useYellow) {
+		//TODO: Let colors be defined by the map or something. This is a poor way of doing this.
+		
+		teamColors = new HashMap<String, DyeColor>();
+		if (useRed) {
+			red = getTeam("RED");
+			teamColors.put(red.getName(), DyeColor.RED);
+		}
 
-		red = sbm.getTeam("RED");
-		teamColors.put(red.getName(), Color.RED);
+		if (useBlue) {
+			blue = getTeam("BLUE");
+			teamColors.put(blue.getName(), DyeColor.BLUE);
+		}
 
-		blue = sbm.getTeam("BLUE");
-		teamColors.put(blue.getName(), Color.BLUE);
+		if (useGreen) {
+			green = getTeam("GREEN");
+			teamColors.put(green.getName(), DyeColor.GREEN);
+		}
 
-		green = sbm.getTeam("GREEN");
-		teamColors.put(green.getName(), Color.GREEN);
-
-		yellow = sbm.getTeam("YELLOW");
-		teamColors.put(yellow.getName(), Color.YELLOW);
+		if (useYellow) {
+			yellow = getTeam("YELLOW");
+			teamColors.put(yellow.getName(), DyeColor.YELLOW);
+		}
+	}
+	
+	@Override
+	public DyeColor[] getSpawnColors() {
+		return new DyeColor[]{DyeColor.RED, DyeColor.BLUE, DyeColor.GREEN, DyeColor.YELLOW};
 	}
 	
 	@Override
 	public Location getSpawnLocation(Player player){
 		Team team = this.getTeam(player);
-		LOCATIONS l = LOCATIONS.RED;
 		
-		if (team != null) {
-			if (team.getName() == blue.getName()) {
-				l = LOCATIONS.BLUE;
-			} else if (team.getName() == green.getName()) {
-				l = LOCATIONS.GREEN;
-			} else if (team.getName() == yellow.getName()) {
-				l = LOCATIONS.YELLOW;
-			}
+		try {
+			SpawnLocation l = new SpawnLocation(teamColors.get(team.getName()));
+			return mygames.getWorldMgr().getLocation(world, l.configKey());
+		} catch (Exception e) {
+			mygames.getLogger().severe("Unable to find spawns for TeamGame \"" + getName() + "\" in world \"" + world.getName() + "\"? Giving random spawn.");
+			return mygames.getWorldMgr().getRandomSpawn(world);
 		}
-		
-		return TeamWorld.getLocation(mygames.getWorldMgr(), world, l);
 	}
 
 	/**
@@ -69,86 +99,72 @@ public abstract class TeamGame extends Game {
 	public final void preparePlayer(Player player) {
 		if (autoAssign) {
 			Team team = getSmallestTeam();
-			setTeam(player, team);
 			preparePlayer(player, team);
+			setTeam(player, team);
 		} else {
 			preparePlayer(player, null);
 		}
 	}
 
 	/**
+	 * Sets player's class.
 	 * If you are assigning teams, make sure to use .setTeam(Player player, Team
 	 * team).
 	 * 
 	 * @param player
-	 *            = player to prepare.
+	 *= player to prepare.
 	 * @param team
-	 *            = assigned team. Will be null if autoAssign = false.
+	 *= assigned team. Will be null if autoAssign = false.
 	 */
-	public abstract void preparePlayer(Player player, Team team);
+	public void preparePlayer(Player player, Team team) {
+		super.preparePlayer(player);
+	}
 
 	public void setTeam(Player player, Team team) {
 		if (!team.getPlayers().contains(player))
 			team.addPlayer(player);
 
-		if (autoArmor) {
+		if (autoHelmet) {
 			PlayerInventory pi = player.getInventory();
 			pi.clear();
 
 			Wool w = new Wool();
-			w.setColor(DyeColor.getByColor(getTeamColor(team)));
+			w.setColor(getTeamDyeColor(team));
+
 			pi.setHelmet(w.toItemStack());
-
-			ItemStack lChest = new ItemStack(Material.LEATHER_CHESTPLATE);
-			LeatherArmorMeta lam = (LeatherArmorMeta) lChest.getItemMeta();
-			lam.setColor(getTeamColor(team));
-			lChest.setItemMeta(lam);
-			pi.setChestplate(lChest);
-
-			ItemStack lLegs = new ItemStack(Material.LEATHER_LEGGINGS);
-			lam = (LeatherArmorMeta) lLegs.getItemMeta();
-			lam.setColor(getTeamColor(team));
-			lLegs.setItemMeta(lam);
-			pi.setLeggings(lLegs);
-
-			ItemStack lBoots = new ItemStack(Material.LEATHER_BOOTS);
-			lam = (LeatherArmorMeta) lBoots.getItemMeta();
-			lam.setColor(getTeamColor(team));
-			lBoots.setItemMeta(lam);
-			pi.setBoots(lBoots);
 		}
 	}
 
 	public ArrayList<Team> getTeams() {
 		ArrayList<Team> teams = new ArrayList<Team>();
 
-		teams.add(red);
-		teams.add(blue);
-		teams.add(green);
-		teams.add(yellow);
+		if (red != null)
+			teams.add(red);
+		if (blue != null)
+			teams.add(blue);
+		if (green != null)
+			teams.add(green);
+		if (yellow != null)
+			teams.add(yellow);
 
 		return teams;
 	}
 
 	public ArrayList<Team> getPopulatedTeams() {
 		ArrayList<Team> teams = new ArrayList<Team>();
-		if (red.getSize() > 0)
-			teams.add(red);
-		if (blue.getSize() > 0)
-			teams.add(blue);
-		if (green.getSize() > 0)
-			teams.add(green);
-		if (yellow.getSize() > 0)
-			teams.add(yellow);
+		for (Team team : getTeams()) {
+			if (team != null && team.getSize() > 0)
+				teams.add(team);
+		}
 		return teams;
 	}
 	
-	public Team getTeam(Player player) {
+	public Team getTeam(OfflinePlayer offlinePlayer) {
 		ArrayList<Team> teams = getPopulatedTeams();
 		
 		for (Team team : teams){ 
 			for (OfflinePlayer p : team.getPlayers()) {
-				if (p.getUniqueId() == player.getUniqueId())
+				if (p.getUniqueId() == offlinePlayer.getUniqueId())
 						return team;
 			}
 		}
@@ -157,32 +173,49 @@ public abstract class TeamGame extends Game {
 	}
 
 	public Team getSmallestTeam() {
-		int minimum = Math.min(Math.min(red.getSize(), blue.getSize()),
-				Math.min(green.getSize(), yellow.getSize()));
-
-		if (red.getSize() == minimum)
-			return red;
-		else if (blue.getSize() == minimum)
-			return blue;
-		else if (green.getSize() == minimum)
-			return green;
-		else
-			return yellow;
+		Team smallest = null;
+		for (Team team : getTeams()) {
+			if (smallest == null) {
+				smallest = team;
+				continue;
+			}
+			if (team.getSize() < smallest.getSize())
+				smallest = team;
+		}
+		return smallest;
 	}
 
-	public void setTeamColor(Team team, Color color) {
+	public void setTeamDyeColor(Team team, DyeColor color) {
 		teamColors.put(team.getName(), color);
 	}
 
-	public Color getTeamColor(Team team) {
+	public DyeColor getTeamDyeColor(Team team) {
 		return teamColors.get(team.getName());
 	}
-
-	public void setTeamPoints(Team team, int points) {
-		teamPoints.put(team.getName(), points);
+	
+	public Color getTeamColor(Team team) {
+		return teamColors.get(team.getName()).getColor();
 	}
 
-	public int getTeamPoints(Team team) {
+	public void setPoints(Team team, int points) {
+		teamPoints.put(team.getName(), points);
+	}
+	
+	/**
+	 * Adding a negative will remove.
+	 */
+	public void addPoints(Team team, int points) {
+		setPoints(team, getPoints(team) + points);
+	}
+	
+	/**
+	 * Removing a negative does not add.
+	 */
+	public void removePoints(Team team, int points) {
+		setPoints(team, getPoints(team) - Math.abs(points));
+	}
+
+	public int getPoints(Team team) {
 		return teamPoints.get(team.getName());
 	}
 	
@@ -193,13 +226,23 @@ public abstract class TeamGame extends Game {
 		}
 		return scores;
 	}
+	
+	@Override
+	public boolean playerDamagePlayer(Player attacker, Player victim) {
+		Team team = getTeam(attacker);
+		
+		if (team.allowFriendlyFire())
+			return true;
+		
+		return (team.hasPlayer(victim));
+	}
 
 	public void setAutoAssign(boolean autoAssign) {
 		this.autoAssign = autoAssign;
 	}
 
 	public void setAutoArmor(boolean autoArmor) {
-		this.autoArmor = autoArmor;
+		this.autoHelmet = autoArmor;
 	}
 
 	public boolean getAutoAssign() {
@@ -207,6 +250,7 @@ public abstract class TeamGame extends Game {
 	}
 
 	public boolean getAutoArmor() {
-		return autoArmor;
+		return autoHelmet;
 	}
+	
 }

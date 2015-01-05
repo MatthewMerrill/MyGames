@@ -1,4 +1,4 @@
-package xenar47.bukkit.mygames;
+package xenar47.bukkit.mygames.listeners;
 
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -7,7 +7,7 @@ import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
 import org.bukkit.event.weather.WeatherChangeEvent;
 import org.bukkit.event.world.WorldEvent;
 
-public class BaseWorldListener implements Listener {
+public class WorldListener implements Listener {
 
 	@EventHandler
 	public void onTimeChange(WeatherChangeEvent event) {
